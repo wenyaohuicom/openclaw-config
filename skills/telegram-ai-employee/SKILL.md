@@ -80,6 +80,14 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Treat queue state as the source of truth before any follow-up or催办 auto-send.
 - Keep evidence snippets on each task so a human can audit why the bot thinks something is `new`, `processing`, or `done`.
 
+## Phase 5: Live Dispatch Runner
+
+- Read `references/phase-5-live-runner.md` before using the live runner on real chats.
+- Run `scripts/run_telegram_dispatch_runner.sh --profile <name> --chat '<group name>'` to process recent inbound messages into a live queue.
+- Add `--watch` to keep listening for new messages, but keep it suggestion-only until the owner explicitly approves auto-send.
+- Read from `output/<profile>/runtime/live_suggestions.jsonl` and `output/<profile>/runtime/live_task_queue.json`.
+- Use this phase to validate that the bot can keep up with real work before it sends anything.
+
 ## Notes For Future Features
 
 - Add contact and chat classification before broad auto-reply features.
