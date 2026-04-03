@@ -88,6 +88,13 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Read from `output/<profile>/runtime/live_suggestions.jsonl` and `output/<profile>/runtime/live_task_queue.json`.
 - Use this phase to validate that the bot can keep up with real work before it sends anything.
 
+## Phase 6: Human Mimic Mode
+
+- Read `references/phase-6-human-mimic-mode.md` before enabling any outbound behavior.
+- Run `scripts/derive_human_playbook.py --profile <name>` to summarize how the human actually works in each group.
+- Optimize for role mimicry, not generic assistant helpfulness.
+- Keep finance, pricing, and ambiguous negotiation topics in human-review mode longer than pure dispatch flows.
+
 ## Notes For Future Features
 
 - Add contact and chat classification before broad auto-reply features.
