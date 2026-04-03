@@ -31,6 +31,7 @@ from suggest_telegram_actions import (
     suggested_action,
 )
 from build_telegram_task_queue import merge_state, message_state, priority_for, subject_key
+from hongyun_takeover import TARGET_CHAT as HONGYUN_CHAT, choose_reply as choose_hongyun_reply, load_rules as load_hongyun_rules
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_ROOT = SCRIPT_DIR.parent
@@ -110,6 +111,8 @@ class LiveDispatchState:
         self.sent_log = []
         self.last_sent_at = {}
         self.allowed_categories = set(args.allow_category or SAFE_DEFAULT_ALLOW)
+        self.chat_context = defaultdict(list)
+        self.hongyun_rules = load_hongyun_rules()
 
     def process_row(self, row):
         category = classify_message(row.get("text", ""))
@@ -134,12 +137,23 @@ class LiveDispatchState:
         self.suggestions.append(suggestion)
         if category in RELEVANT_QUEUE_CATEGORIES:
             self._update_task(row, category, suggestion)
+        self.chat_context[row["chat_id"]].append({"role": "other", "text": row.get("text", "")})
+        self.chat_context[row["chat_id"]] = self.chat_context[row["chat_id"]][-8:]
         self._save()
         return suggestion
 
     def render_reply(self, row, category):
         if self.args.reply_style != "mimic":
             return suggest_reply(category, row.get("text", ""), self.reply_bank)
+
+        # Per-chat takeover override for the first production target group.
+        if row.get("chat_title") == HONGYUN_CHAT:
+            context_items = self.chat_context.get(row["chat_id"], [])
+            predicted, predicted_family, _reason = choose_hongyun_reply(
+                row.get("text", ""), context_items, self.hongyun_rules
+            )
+            if predicted:
+                return predicted
 
         # Only mimic per-chat phrasing for categories with stable, low-risk short replies.
         if category not in {"acknowledge", "dispatch-escalate", "follow-up", "request-info"}:
@@ -194,6 +208,8 @@ class LiveDispatchState:
             "category": suggestion["operation_category"],
         }
         self.sent_log.append(event)
+        self.chat_context[row["chat_id"]].append({"role": "assistant", "text": suggestion["suggested_reply"]})
+        self.chat_context[row["chat_id"]] = self.chat_context[row["chat_id"]][-8:]
         self._save()
 
     def _update_task(self, row, category, suggestion):

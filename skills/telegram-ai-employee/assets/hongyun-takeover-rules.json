@@ -1,0 +1,61 @@
+{
+  "chatTitle": "鸿运,企业微信(二梯队)",
+  "replyFamilies": {
+    "ack": ["1", "好的", "好的哥", "嗯"],
+    "dispatch": ["我已经在联系兼职了", "正在联系兼职", "处理", "稍等", "正在处理", "正在处理了", "马上", "加急了", "我加速", "发到群里 找兼职了", "正在努力联系 哥"],
+    "request_info": ["发一下资料哥", "你是几号哥", "1号云机对吧", "好的 有问题再找我", "重启了吗"],
+    "confirm": ["认证好了对吧"],
+    "review": ["看一下", "收到，我先看一下"]
+  },
+  "riskTerms": ["账单", "多少钱", "价格", "USDT", "主体", "退号", "不用了", "不接粉", "半价", "回访半价"],
+  "rules": [
+    {
+      "name": "structured-info-received",
+      "whenAny": ["云机号", "云机密码", "微信手机号", "企业主体", "归属地", "上号："],
+      "reply": "好的",
+      "family": "ack"
+    },
+    {
+      "name": "ask-worker-id",
+      "whenAny": ["没看到云机有动静", "快一点", "那么久没有动静"],
+      "reply": "你是几号哥",
+      "family": "request_info"
+    },
+    {
+      "name": "ask-send-material",
+      "whenAny": ["我的是这个", "资料", "云机号", "企业主体"],
+      "reply": "发一下资料哥",
+      "family": "request_info"
+    },
+    {
+      "name": "dispatch-contacting-worker",
+      "whenAny": ["这个有人处理吗", "你人呢", "能不能搞", "速度处理", "加急", "处理一下", "没有处理", "还没找到人", "没找到人"],
+      "reply": "正在处理",
+      "family": "dispatch"
+    },
+    {
+      "name": "dispatch-soft-hold",
+      "whenAny": ["稍等", "处理", "在处理吗", "还有客户呢"],
+      "reply": "稍等",
+      "family": "dispatch"
+    },
+    {
+      "name": "confirm-auth-finished",
+      "whenAny": ["这个可以了", "可以通过", "认证好了"],
+      "reply": "认证好了对吧",
+      "family": "confirm"
+    },
+    {
+      "name": "force-ack",
+      "whenExact": ["1", "118", "好的"],
+      "reply": "1",
+      "family": "ack"
+    },
+    {
+      "name": "relogin",
+      "whenAny": ["登录好没", "重新登陆", "重连了还是卡", "还是不行"],
+      "reply": "重启了吗",
+      "family": "request_info"
+    }
+  ]
+}

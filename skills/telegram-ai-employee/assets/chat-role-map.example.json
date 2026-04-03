@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "profiles": {
+    "test": {
+      "118公司总群": {
+        "role": "control",
+        "automationLevel": "suggest-only",
+        "replyStyle": "mixed-review",
+        "riskFlags": ["subject-change"]
+      },
+      "118二梯队上号群": {
+        "role": "execution",
+        "automationLevel": "suggest-only",
+        "replyStyle": "terse-dispatch",
+        "riskFlags": []
+      },
+      "鸿运,企业微信(二梯队)": {
+        "role": "dispatch",
+        "automationLevel": "whitelist-send",
+        "replyStyle": "terse-dispatch",
+        "riskFlags": []
+      },
+      "118 ip": {
+        "role": "exception",
+        "automationLevel": "suggest-only",
+        "replyStyle": "issue-routing",
+        "riskFlags": []
+      },
+      "风油精,企业微信【87】": {
+        "role": "mixed-risk",
+        "automationLevel": "deny",
+        "replyStyle": "mixed-review",
+        "riskFlags": ["pricing", "billing", "subject-change"]
+      },
+      "118 Monica": {
+        "role": "side-channel",
+        "automationLevel": "suggest-only",
+        "replyStyle": "terse-dispatch",
+        "riskFlags": ["credential-flow"]
+      },
+      "Kevin Acacia": {
+        "role": "unknown",
+        "automationLevel": "deny",
+        "replyStyle": "mixed-review",
+        "riskFlags": []
+      },
+      "风油精(不借/不垫付/免开尊口)": {
+        "role": "unknown",
+        "automationLevel": "deny",
+        "replyStyle": "mixed-review",
+        "riskFlags": ["pricing"]
+      }
+    }
+  }
+}

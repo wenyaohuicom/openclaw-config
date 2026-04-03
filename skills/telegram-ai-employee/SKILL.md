@@ -102,6 +102,19 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Prefer mimic mode so replies come from the per-chat human playbook rather than generic assistant phrasing.
 - Keep `issue-report` and finance-related topics in human-review mode longer.
 
+## Phase 8: Chat Roles And Correlation
+
+- Read `references/phase-8-chat-role-requirements.md` before widening automation beyond a few safe chats.
+- Treat chats as workflow roles, not one global message pool.
+- Use `assets/chat-role-map.example.json` as the starter shape for per-profile chat role configuration.
+- Expand automation only after private/group correlation and silence rules are explicit.
+
+## Phase 9: Single-Chat Takeover
+
+- Start takeover from one stable dispatch chat instead of broad automation.
+- Use `scripts/hongyun_takeover.py --profile <name>` to replay how a Hongyun-specific responder would behave against historical samples.
+- Keep broad frameworks secondary; optimize for exact replacement of repetitive human dispatch work.
+
 ## Notes For Future Features
 
 - Add contact and chat classification before broad auto-reply features.
