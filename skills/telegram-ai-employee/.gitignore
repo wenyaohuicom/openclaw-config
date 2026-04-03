@@ -1,0 +1,8 @@
+output/
+__pycache__/
+*.pyc
+*.session
+*.session-journal
+.env
+.env.*
+secrets/
