@@ -6,14 +6,15 @@ Capture how the owner actually works in Telegram, then turn that activity into s
 
 ## Recommended Process
 
-1. Put API credentials in `secrets/telegram.env` or environment variables.
-2. Authenticate the owner's Telegram user account locally.
-3. Pull recent dialogs and let the owner narrow the scope to work-related chats when possible.
-4. Default to private chats plus group chats when the owner wants to learn both direct handling and group-work patterns.
-5. Leave channels optional unless the owner explicitly wants feed-style sources included.
-6. Export raw messages with sender, timestamp, chat metadata, and reply links.
-7. Build derived examples from outbound human replies.
-8. Review and redact before using the material for prompting or training.
+1. Put shared API credentials in `secrets/telegram.env` or environment variables.
+2. For a second account, add `secrets/telegram.<profile>.env` and run with `--profile <name>` so the session and output stay isolated.
+3. Authenticate the owner's Telegram user account locally.
+4. Pull recent dialogs and let the owner narrow the scope to work-related chats when possible.
+5. Default to private chats plus group chats when the owner wants to learn both direct handling and group-work patterns.
+6. Leave channels optional unless the owner explicitly wants feed-style sources included.
+7. Export raw messages with sender, timestamp, chat metadata, and reply links.
+8. Build derived examples from outbound human replies.
+9. Review and redact before using the material for prompting or training.
 
 ## Raw Export
 
@@ -81,5 +82,6 @@ Before training or prompt-ingesting the data:
 - Remove chats unrelated to work.
 - Consider replacing personal names with stable labels when identity is not needed.
 - Store raw exports locally; use derived datasets for most downstream work.
-- Keep the default session file under `skills/telegram-ai-employee/secrets/` and the export under `skills/telegram-ai-employee/output/` unless you have a better local layout.
+- Keep the default session file under `skills/telegram-ai-employee/secrets/telegram-user.session` and named-profile sessions under `skills/telegram-ai-employee/secrets/telegram-user.<profile>.session`.
+- Keep the default export under `skills/telegram-ai-employee/output/` and named-profile exports under `skills/telegram-ai-employee/output/<profile>/` unless you have a better local layout.
 - Keep redaction enabled for phones, OTPs, obvious tokens, and secret-looking query params unless a controlled review requires raw text.

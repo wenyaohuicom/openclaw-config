@@ -21,10 +21,11 @@ PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d[\d\s().-]{7,}\d)")
 OTP_RE = re.compile(r"\b(?:code|otp|password|verification|login code)\b[:\s-]*[A-Za-z0-9-]{4,}", re.IGNORECASE)
 TOKEN_RE = re.compile(r"\b(?:sk|rk|pk|ghp|gho|ghu|glpat|eyJ)[A-Za-z0-9._-]{8,}\b")
 QUERY_SECRET_RE = re.compile(r"([?&](?:token|code|key|auth|access_token|refresh_token|password)=)[^&\s]+", re.IGNORECASE)
+PROFILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_ROOT = SCRIPT_DIR.parent
-DEFAULT_OUTPUT_DIR = SKILL_ROOT / "output"
-DEFAULT_SESSION_PATH = SKILL_ROOT / "secrets" / "telegram-user.session"
+SECRETS_DIR = SKILL_ROOT / "secrets"
+OUTPUT_ROOT = SKILL_ROOT / "output"
 
 
 def parse_args():
@@ -32,15 +33,18 @@ def parse_args():
         description="Export Telegram work activity from a personal account and derive training examples."
     )
     parser.add_argument(
-        "--output",
-        default=os.getenv("TG_OUTPUT_DIR", str(DEFAULT_OUTPUT_DIR)),
-        help="Output root directory",
+        "--profile",
+        default=os.getenv("TG_PROFILE", "default"),
+        help="Account profile name; keeps session and output isolated per account",
     )
-    parser.add_argument(
-        "--session",
-        default=os.getenv("TG_SESSION_PATH", str(DEFAULT_SESSION_PATH)),
-    )
+    parser.add_argument("--output", help="Output root directory")
+    parser.add_argument("--session", help="Telethon session file path")
     parser.add_argument("--days", type=int, default=14, help="Look back N days")
+    parser.add_argument(
+        "--phone",
+        default=os.getenv("TG_PHONE"),
+        help="Telegram login phone number; prompts interactively when omitted in a TTY",
+    )
     parser.add_argument(
         "--dialog",
         action="append",
@@ -98,6 +102,24 @@ def env_required(name):
 
 def normalize(text):
     return re.sub(r"\s+", " ", (text or "")).strip()
+
+
+def resolve_profile(profile):
+    profile = normalize(profile) or "default"
+    if not PROFILE_RE.match(profile):
+        raise SystemExit(
+            "Invalid profile name. Use only letters, digits, dot, underscore, or hyphen."
+        )
+    return profile
+
+
+def default_output_dir(profile):
+    return OUTPUT_ROOT if profile == "default" else OUTPUT_ROOT / profile
+
+
+def default_session_path(profile):
+    name = "telegram-user.session" if profile == "default" else f"telegram-user.{profile}.session"
+    return SECRETS_DIR / name
 
 
 def parse_scope(scope_value):
@@ -349,7 +371,17 @@ def derive_reply_pairs(messages, min_outbound):
     return pairs, stats
 
 
-def summarize(dialogs, messages, pairs, stats, since_dt, scopes, keywords, redaction_enabled):
+def summarize(
+    dialogs,
+    messages,
+    pairs,
+    stats,
+    since_dt,
+    scopes,
+    keywords,
+    redaction_enabled,
+    profile,
+):
     per_chat = Counter(row["chat_title"] for row in messages)
     scope_counts = Counter(row["scope"] for row in messages)
     outbound = sum(1 for row in messages if row["out"])
@@ -359,6 +391,7 @@ def summarize(dialogs, messages, pairs, stats, since_dt, scopes, keywords, redac
     lines = [
         "# Telegram Work Summary",
         "",
+        f"- Profile: {profile}",
         f"- Time window start: {since_dt.isoformat()}",
         f"- Scopes: {', '.join(sorted(scopes))}",
         f"- Dialogs scanned: {len(dialogs)}",
@@ -394,16 +427,29 @@ def summarize(dialogs, messages, pairs, stats, since_dt, scopes, keywords, redac
     return "\n".join(lines) + "\n"
 
 
+def resolve_phone(args):
+    if args.phone:
+        return args.phone
+    if os.isatty(0):
+        phone = input("Telegram phone number: ").strip()
+        if phone:
+            return phone
+    raise SystemExit(
+        "Missing Telegram phone number. Set TG_PHONE, pass --phone, or run in a TTY to enter it interactively."
+    )
+
+
 async def main():
     args = parse_args()
+    profile = resolve_profile(args.profile)
     api_id = int(env_required("TG_API_ID"))
     api_hash = env_required("TG_API_HASH")
-    phone = os.getenv("TG_PHONE")
+    phone = resolve_phone(args)
     scopes = parse_scope(args.scope)
     redaction_enabled = not args.no_redact
 
-    out_root = Path(args.output)
-    session_path = Path(args.session)
+    out_root = Path(args.output or os.getenv("TG_OUTPUT_DIR") or default_output_dir(profile))
+    session_path = Path(args.session or os.getenv("TG_SESSION_PATH") or default_session_path(profile))
     raw_dir = out_root / "raw"
     derived_dir = out_root / "derived"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -428,7 +474,15 @@ async def main():
     messages = apply_redaction(messages, redaction_enabled)
     pairs, stats = derive_reply_pairs(messages, args.min_outbound)
     summary = summarize(
-        dialogs, messages, pairs, stats, since_dt, scopes, keywords, redaction_enabled
+        dialogs,
+        messages,
+        pairs,
+        stats,
+        since_dt,
+        scopes,
+        keywords,
+        redaction_enabled,
+        profile,
     )
 
     (raw_dir / "dialogs.json").write_text(
@@ -444,7 +498,7 @@ async def main():
 
     await client.disconnect()
     print(
-        f"Exported {len(messages)} messages and {len(pairs)} reply pairs to {out_root}"
+        f"Exported {len(messages)} messages and {len(pairs)} reply pairs to {out_root} (profile={profile})"
     )
 
 

@@ -14,6 +14,7 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Use `--keyword`, `--dialog`, and `--exclude-dialog` to narrow the export before training.
 - Keep credentials and session files out of git.
 - Default session files live under `skills/telegram-ai-employee/secrets/` so they stay scoped and ignored.
+- Use `--profile <name>` to keep multiple Telegram accounts isolated from each other.
 
 ## Workflow
 
@@ -29,13 +30,16 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Optional: `TG_PHONE`
 - Optional: `TG_SESSION_PATH`
 - Optional launcher env file: `skills/telegram-ai-employee/secrets/telegram.env`
+- Optional per-profile env file: `skills/telegram-ai-employee/secrets/telegram.<profile>.env`
+- Optional runtime flags: `--phone`, `--profile`
 
 ## Output Layout
 
-- `skills/telegram-ai-employee/output/raw/dialogs.json`
-- `skills/telegram-ai-employee/output/raw/messages.jsonl`
-- `skills/telegram-ai-employee/output/derived/reply_pairs.jsonl`
-- `skills/telegram-ai-employee/output/derived/work_summary.md`
+- Default profile: `skills/telegram-ai-employee/output/raw/dialogs.json`
+- Default profile: `skills/telegram-ai-employee/output/raw/messages.jsonl`
+- Named profile: `skills/telegram-ai-employee/output/<profile>/raw/dialogs.json`
+- Named profile: `skills/telegram-ai-employee/output/<profile>/derived/reply_pairs.jsonl`
+- Named profile: `skills/telegram-ai-employee/output/<profile>/derived/work_summary.md`
 
 ## Safety Rules
 
@@ -49,6 +53,7 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Read `references/feature-1-data-pipeline.md` before first use.
 - Run `scripts/collect_telegram_work.py` with a time window, `--scope users,groups`, and optional dialog or keyword filters.
 - Or use `scripts/run_collect_telegram_work.sh` after filling `secrets/telegram.env`.
+- For multiple accounts, keep shared API creds in `secrets/telegram.env` and per-account phone overrides in `secrets/telegram.<profile>.env`, then run with `--profile <name>`.
 - Use `--list-dialogs` first when you want to inspect candidate chats before exporting messages.
 - Leave redaction on unless there is a strong reason to keep raw secrets in the dataset.
 - If the goal is later training, use the derived reply pairs as the first dataset, not the full raw dump.
