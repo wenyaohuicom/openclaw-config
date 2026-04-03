@@ -73,6 +73,13 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Compare `suggested_reply` against `historical_reply` before enabling any auto-send path.
 - Treat `acknowledge` as the safest first auto-send category; keep issue reports human-approved longer.
 
+## Phase 4: Build A Task Queue
+
+- Read `references/phase-4-task-queue.md` after action suggestions exist.
+- Run `scripts/build_telegram_task_queue.py --profile <name>` to convert grouped operational messages into queue items.
+- Treat queue state as the source of truth before any follow-up or催办 auto-send.
+- Keep evidence snippets on each task so a human can audit why the bot thinks something is `new`, `processing`, or `done`.
+
 ## Notes For Future Features
 
 - Add contact and chat classification before broad auto-reply features.
