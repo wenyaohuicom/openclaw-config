@@ -444,7 +444,6 @@ async def main():
     profile = resolve_profile(args.profile)
     api_id = int(env_required("TG_API_ID"))
     api_hash = env_required("TG_API_HASH")
-    phone = resolve_phone(args)
     scopes = parse_scope(args.scope)
     redaction_enabled = not args.no_redact
 
@@ -459,7 +458,10 @@ async def main():
     since_dt = datetime.now(timezone.utc) - timedelta(days=args.days)
 
     client = TelegramClient(str(session_path), api_id, api_hash)
-    await client.start(phone=phone)
+    await client.connect()
+    if not await client.is_user_authorized():
+        phone = resolve_phone(args)
+        await client.start(phone=phone)
 
     dialogs, messages, per_chat_outbound = await collect_messages(client, args, since_dt)
     if args.list_dialogs:

@@ -58,8 +58,15 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Leave redaction on unless there is a strong reason to keep raw secrets in the dataset.
 - If the goal is later training, use the derived reply pairs as the first dataset, not the full raw dump.
 
+## Phase 2: Replace Manual Operations
+
+- Read `references/phase-2-operations-model.md` after the first export exists.
+- Run `scripts/analyze_telegram_operations.py --profile <name>` to turn reply pairs into operation categories.
+- Treat the operator role as dispatch-heavy work coordination, not generic conversation.
+- Start with message classification, task extraction, and suggested replies before enabling auto-send.
+
 ## Notes For Future Features
 
-- Add contact and chat classification before auto-reply features.
+- Add contact and chat classification before broad auto-reply features.
 - Add approval gates before any outbound automation.
 - Keep observation and learning separate from acting on behalf of the owner.
