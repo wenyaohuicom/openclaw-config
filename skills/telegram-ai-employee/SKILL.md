@@ -65,6 +65,14 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Treat the operator role as dispatch-heavy work coordination, not generic conversation.
 - Start with message classification, task extraction, and suggested replies before enabling auto-send.
 
+## Phase 3: Suggest Actions And Replies
+
+- Read `references/phase-3-action-playbook.md` after `operation_labels.jsonl` exists.
+- Run `scripts/suggest_telegram_actions.py --profile <name>` to generate action suggestions for recent inbound messages.
+- Review `output/<profile>/derived/action_suggestions.md` to compare suggested replies with historical human replies.
+- Compare `suggested_reply` against `historical_reply` before enabling any auto-send path.
+- Treat `acknowledge` as the safest first auto-send category; keep issue reports human-approved longer.
+
 ## Notes For Future Features
 
 - Add contact and chat classification before broad auto-reply features.
