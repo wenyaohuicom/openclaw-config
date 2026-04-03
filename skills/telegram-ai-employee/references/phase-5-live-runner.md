@@ -44,8 +44,8 @@ If the bot repeatedly classifies and suggests correctly, that category can move 
 1. Observe only
 2. Suggest only
 3. Auto-send `acknowledge`
-4. Auto-send narrow `follow-up` playbooks
-5. Keep issue reports and dispatch actions human-reviewed until queue quality is stable
+4. Auto-send narrow `dispatch-escalate` / `follow-up` / `request-info` playbooks
+5. Keep issue reports and finance-related threads human-reviewed until queue quality is stable
 
 ## Runtime Artifacts
 

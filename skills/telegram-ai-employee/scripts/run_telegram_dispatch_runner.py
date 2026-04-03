@@ -2,7 +2,7 @@
 import argparse
 import asyncio
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -35,6 +35,16 @@ from build_telegram_task_queue import merge_state, message_state, priority_for, 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_ROOT = SCRIPT_DIR.parent
 RELEVANT_QUEUE_CATEGORIES = {"issue-report", "dispatch-escalate", "follow-up", "request-info"}
+CATEGORY_ALIAS = {
+    "dispatch-escalate": "dispatch",
+    "request-info": "request-info",
+    "follow-up": "follow-up",
+    "acknowledge": "ack",
+    "issue-report": "issue-report",
+    "other": "other",
+}
+SAFE_DEFAULT_ALLOW = {"acknowledge", "dispatch-escalate", "follow-up", "request-info"}
+HIGH_RISK_TERMS = ["账单", "半价", "多少钱", "价格", "USDT", "主体", "拉主体", "不接粉", "回访半价"]
 
 
 def parse_args():
@@ -55,26 +65,57 @@ def parse_args():
         default=0,
         help="Optional timeout for watch mode; 0 means run until interrupted",
     )
+    parser.add_argument(
+        "--send-mode",
+        choices=["shadow", "whitelist"],
+        default="shadow",
+        help="shadow only logs拟人回复; whitelist may auto-send only approved categories",
+    )
+    parser.add_argument(
+        "--allow-category",
+        action="append",
+        default=[],
+        help="Auto-send allowlist category; repeatable. Examples: acknowledge, dispatch-escalate",
+    )
+    parser.add_argument(
+        "--cooldown-seconds",
+        type=int,
+        default=180,
+        help="Minimum seconds between auto-sends in the same chat",
+    )
+    parser.add_argument(
+        "--reply-style",
+        choices=["mimic", "generic"],
+        default="mimic",
+        help="mimic uses per-chat human playbook when possible",
+    )
     return parser.parse_args()
 
 
 class LiveDispatchState:
-    def __init__(self, profile, root, reply_bank):
+    def __init__(self, profile, root, reply_bank, playbook, args):
         self.profile = profile
         self.root = root
         self.reply_bank = reply_bank
+        self.playbook = playbook
+        self.args = args
         self.runtime_dir = root / "runtime"
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
         self.suggestions_path = self.runtime_dir / "live_suggestions.jsonl"
         self.queue_path = self.runtime_dir / "live_task_queue.json"
         self.summary_path = self.runtime_dir / "live_task_queue_summary.md"
+        self.sent_log_path = self.runtime_dir / "live_sent_log.jsonl"
         self.tasks = {}
         self.suggestions = []
+        self.sent_log = []
+        self.last_sent_at = {}
+        self.allowed_categories = set(args.allow_category or SAFE_DEFAULT_ALLOW)
 
     def process_row(self, row):
         category = classify_message(row.get("text", ""))
         suggestion = {
             "profile": self.profile,
+            "chat_id": row.get("chat_id"),
             "chat_title": row.get("chat_title"),
             "message_id": row.get("message_id"),
             "date": row.get("date"),
@@ -82,16 +123,78 @@ class LiveDispatchState:
             "operation_category": category,
             "confidence": confidence_for(category, row.get("text", "")),
             "suggested_action": suggested_action(category, row.get("text", "")),
-            "suggested_reply": suggest_reply(category, row.get("text", ""), self.reply_bank),
+            "suggested_reply": self.render_reply(row, category),
             "ports": find_ports(row.get("text", "")),
             "regions": find_regions(row.get("text", "")),
             "workers": find_mentions(row.get("text", "")),
+            "send_mode": self.args.send_mode,
+            "auto_send_eligible": self.is_auto_send_eligible(row, category),
+            "auto_sent": False,
         }
         self.suggestions.append(suggestion)
         if category in RELEVANT_QUEUE_CATEGORIES:
             self._update_task(row, category, suggestion)
         self._save()
         return suggestion
+
+    def render_reply(self, row, category):
+        if self.args.reply_style != "mimic":
+            return suggest_reply(category, row.get("text", ""), self.reply_bank)
+
+        # Only mimic per-chat phrasing for categories with stable, low-risk short replies.
+        if category not in {"acknowledge", "dispatch-escalate", "follow-up", "request-info"}:
+            return suggest_reply(category, row.get("text", ""), self.reply_bank)
+
+        chat_playbook = self.playbook.get(row.get("chat_title"), {})
+        top_replies = chat_playbook.get("top_replies", {})
+        alias = CATEGORY_ALIAS.get(category, category)
+        counter = top_replies.get(alias, {})
+        for reply, _count in counter.items():
+            if self.reply_is_safe(reply, category):
+                return reply
+        return suggest_reply(category, row.get("text", ""), self.reply_bank)
+
+    def reply_is_safe(self, reply, category):
+        if not reply:
+            return False
+        if any(term in reply for term in HIGH_RISK_TERMS):
+            return False
+        if category == "issue-report":
+            return False
+        return True
+
+    def is_auto_send_eligible(self, row, category):
+        if self.args.send_mode != "whitelist":
+            return False
+        if category not in self.allowed_categories:
+            return False
+        if category == "other":
+            return False
+        if any(term in row.get("text", "") for term in HIGH_RISK_TERMS):
+            return False
+        last = self.last_sent_at.get(row["chat_id"])
+        current_ts = datetime.fromisoformat(row["date"]).timestamp()
+        if last and current_ts - last < self.args.cooldown_seconds:
+            return False
+        return True
+
+    def mark_sent(self, row, suggestion, sent_message_id):
+        ts = datetime.fromisoformat(row["date"]).timestamp()
+        self.last_sent_at[row["chat_id"]] = ts
+        suggestion["auto_sent"] = True
+        suggestion["sent_message_id"] = sent_message_id
+        event = {
+            "profile": self.profile,
+            "chat_id": row["chat_id"],
+            "chat_title": row["chat_title"],
+            "source_message_id": row["message_id"],
+            "sent_message_id": sent_message_id,
+            "date": datetime.now(timezone.utc).isoformat(),
+            "reply": suggestion["suggested_reply"],
+            "category": suggestion["operation_category"],
+        }
+        self.sent_log.append(event)
+        self._save()
 
     def _update_task(self, row, category, suggestion):
         task_key = (row["chat_title"], subject_key(row))
@@ -114,6 +217,7 @@ class LiveDispatchState:
                 "latest_message_date": row["date"],
                 "suggested_action": suggestion["suggested_action"],
                 "suggested_reply": suggestion["suggested_reply"],
+                "auto_send_eligible": suggestion["auto_send_eligible"],
                 "evidence": [],
             }
             self.tasks[task_key] = task
@@ -124,6 +228,7 @@ class LiveDispatchState:
         task["latest_message_date"] = row["date"]
         task["suggested_action"] = suggestion["suggested_action"]
         task["suggested_reply"] = suggestion["suggested_reply"]
+        task["auto_send_eligible"] = suggestion["auto_send_eligible"]
         task["message_count"] += 1
         task["primary_category"] = category if task["message_count"] == 1 else task["primary_category"]
         task["assigned_workers"] = sorted(set(task["assigned_workers"]) | set(suggestion["workers"]))
@@ -153,14 +258,23 @@ class LiveDispatchState:
                 item["latest_message_id"],
             ),
         )
-        self.queue_path.write_text(json.dumps(task_list, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        self.queue_path.write_text(
+            json.dumps(task_list, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.sent_log_path.open("w", encoding="utf-8") as fh:
+            for item in self.sent_log[-500:]:
+                fh.write(json.dumps(item, ensure_ascii=False) + "\n")
 
         state_counts = Counter(item["state"] for item in task_list)
         lines = [
             "# Live Telegram Task Queue",
             "",
             f"- Profile: {self.profile}",
+            f"- Send mode: {self.args.send_mode}",
             f"- Suggestions processed: {len(self.suggestions)}",
+            f"- Auto-sent replies: {len(self.sent_log)}",
             f"- Active tasks: {len(task_list)}",
             "",
             "## State Counts",
@@ -176,6 +290,7 @@ class LiveDispatchState:
             lines.append(f"- Subject: {task['subject_key']}")
             lines.append(f"- State: {task['state']}")
             lines.append(f"- Priority: {task['priority']}")
+            lines.append(f"- Auto-send eligible: {'yes' if task.get('auto_send_eligible') else 'no'}")
             lines.append(f"- Suggested action: {task['suggested_action']}")
             lines.append(f"- Suggested reply: {task['suggested_reply']}")
             lines.append(f"- Latest evidence: {evidence}")
@@ -218,6 +333,14 @@ async def resolve_dialogs(client, args):
     return dialogs
 
 
+async def maybe_send_reply(client, row, suggestion, state):
+    if not suggestion.get("auto_send_eligible"):
+        return None
+    sent = await client.send_message(row["chat_id"], suggestion["suggested_reply"])
+    state.mark_sent(row, suggestion, sent.id)
+    return sent.id
+
+
 async def process_recent_messages(client, dialogs, state, recent_per_chat):
     count = 0
     for dialog_id, dialog_meta in dialogs.items():
@@ -227,7 +350,8 @@ async def process_recent_messages(client, dialogs, state, recent_per_chat):
                 continue
             rows.append(row_from_message(dialog_meta, message))
         for row in reversed(rows):
-            state.process_row(row)
+            suggestion = state.process_row(row)
+            await maybe_send_reply(client, row, suggestion, state)
             count += 1
     return count
 
@@ -242,7 +366,9 @@ async def watch_messages(client, dialogs, state, watch_seconds):
         dialog_meta = dialogs.get(event.chat_id)
         if not dialog_meta:
             return
-        suggestion = state.process_row(row_from_message(dialog_meta, event.message))
+        row = row_from_message(dialog_meta, event.message)
+        suggestion = state.process_row(row)
+        await maybe_send_reply(client, row, suggestion, state)
         print(json.dumps(suggestion, ensure_ascii=False))
 
     if watch_seconds and watch_seconds > 0:
@@ -258,6 +384,13 @@ def profile_paths(args):
     return profile, root, session_path
 
 
+def load_human_playbook(root):
+    path = root / "derived" / "human_playbook.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 async def main_async():
     args = parse_args()
     profile, root, session_path = profile_paths(args)
@@ -266,7 +399,8 @@ async def main_async():
 
     operation_labels = load_jsonl(root / "derived" / "operation_labels.jsonl")
     reply_bank = build_reply_bank(operation_labels)
-    state = LiveDispatchState(profile, root, reply_bank)
+    playbook = load_human_playbook(root)
+    state = LiveDispatchState(profile, root, reply_bank, playbook, args)
 
     client = TelegramClient(str(session_path), api_id, api_hash)
     await client.connect()
@@ -279,8 +413,10 @@ async def main_async():
 
     recent_count = await process_recent_messages(client, dialogs, state, args.recent_per_chat)
     print(f"Processed {recent_count} recent inbound messages across {len(dialogs)} chats.")
+    print(f"Send mode: {args.send_mode}")
     print(f"Live suggestions: {state.suggestions_path}")
     print(f"Live queue: {state.queue_path}")
+    print(f"Sent log: {state.sent_log_path}")
 
     if args.watch:
         await watch_messages(client, dialogs, state, args.watch_seconds)

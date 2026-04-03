@@ -95,6 +95,13 @@ description: Build and operate a Telegram AI employee workflow. Use when Codex n
 - Optimize for role mimicry, not generic assistant helpfulness.
 - Keep finance, pricing, and ambiguous negotiation topics in human-review mode longer than pure dispatch flows.
 
+## Phase 7: Auto-Send Whitelist
+
+- Read `references/phase-7-autosend-whitelist.md` before enabling any real outbound sends.
+- Use `--send-mode shadow` by default; switch to `--send-mode whitelist` only on narrow chat/category allowlists.
+- Prefer mimic mode so replies come from the per-chat human playbook rather than generic assistant phrasing.
+- Keep `issue-report` and finance-related topics in human-review mode longer.
+
 ## Notes For Future Features
 
 - Add contact and chat classification before broad auto-reply features.
